@@ -3,18 +3,20 @@ import Icon from '../components/Icon.jsx'
 import { Cover } from '../components/Media.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { formatMinutes, groupByChapter, totalMinutes } from '../lib/courses.js'
-import { keys } from '../lib/files.js'
+import { buckets } from '../lib/files.js'
 import { fa, toman } from '../lib/format.js'
 
 export default function Course() {
   const { id } = useParams()
-  const { courses, owned, addToCart, openMedia } = useApp()
+  const { courses, coursesLoading, owned, addToCart, openMedia } = useApp()
   const course = courses.find((c) => c.id === Number(id))
 
+  if (coursesLoading) return null
   if (!course) return <Navigate to="/courses" replace />
 
   const time = formatMinutes(totalMinutes(course.sessions))
-  const teaser = () => openMedia({ title: `تیزر: ${course.title}`, fileKey: keys.teaser(course.id), kind: 'video' })
+  const teaser = () =>
+    openMedia({ title: `تیزر: ${course.title}`, kind: 'video', bucket: buckets.public, path: course.teaserPath })
 
   return (
     <main className="wrap">
@@ -61,7 +63,7 @@ export default function Course() {
         <div className="row buy-row">
           <span className="price">{toman(course.price)}</span>
           <span className="row-actions">
-            {course.hasTeaser && (
+            {course.teaserPath && (
               <button className="btn btn-outline" onClick={teaser}>
                 <Icon name="play" size={18} /> مشاهدهٔ تیزر
               </button>

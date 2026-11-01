@@ -1,25 +1,25 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext.jsx'
-import { coupons } from '../config.js'
 import { toman } from '../lib/format.js'
 import { startPayment } from '../lib/payment.js'
+import { supabase } from '../lib/supabase.js'
 
 export default function Cart() {
-  const { courses, cart, setCart, user, grantCourses, notify, setRedirectTo } = useApp()
+  const { courses, cart, setCart, user, notify, setRedirectTo } = useApp()
   const navigate = useNavigate()
   const [code, setCode] = useState('')
-  const [discount, setDiscount] = useState(0)
+  const [coupon, setCoupon] = useState({ code: '', percent: 0 })
   const [paying, setPaying] = useState(false)
 
   const items = cart.map((id) => courses.find((c) => c.id === id)).filter(Boolean)
   const subtotal = items.reduce((sum, c) => sum + c.price, 0)
-  const total = Math.round(subtotal * (1 - discount))
+  const total = Math.round(subtotal * (1 - coupon.percent / 100))
 
-  const applyCoupon = () => {
-    const value = coupons[code.trim().toUpperCase()]
-    if (!value) return notify('کد تخفیف معتبر نیست')
-    setDiscount(value)
+  const applyCoupon = async () => {
+    const { data, error } = await supabase.rpc('apply_coupon', { coupon_code: code })
+    if (error || !data) return notify('کد تخفیف معتبر نیست')
+    setCoupon({ code: code.trim().toUpperCase(), percent: data })
     notify('کد تخفیف اعمال شد')
   }
 
@@ -31,15 +31,10 @@ export default function Cart() {
     }
     setPaying(true)
     try {
-      const result = await startPayment({ amount: total, courseIds: items.map((c) => c.id) })
-      if (result.redirectUrl) {
-        window.location.href = result.redirectUrl
-        return
-      }
-      grantCourses(items.map((c) => c.id))
-      navigate('/panel')
+      const { redirectUrl } = await startPayment({ courseIds: items.map((c) => c.id), coupon: coupon.code })
+      window.location.href = redirectUrl
     } catch {
-      notify('اتصال به درگاه پرداخت ناموفق بود')
+      notify('درگاه پرداخت هنوز فعال نیست')
     } finally {
       setPaying(false)
     }
@@ -80,7 +75,7 @@ export default function Cart() {
             <button className="btn btn-outline" onClick={applyCoupon}>اعمال</button>
           </div>
           <p>جمع دوره‌ها: {toman(subtotal)}</p>
-          {discount > 0 && <p>تخفیف: {toman(subtotal - total)}</p>}
+          {coupon.percent > 0 && <p>تخفیف: {toman(subtotal - total)}</p>}
           <p className="price total">مبلغ قابل پرداخت: {toman(total)}</p>
           <button className="btn" onClick={pay} disabled={paying}>
             {paying ? 'در حال اتصال…' : 'پرداخت'}

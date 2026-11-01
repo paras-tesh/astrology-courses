@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import CourseForm from './CourseForm.jsx'
 import { useApp } from '../../context/AppContext.jsx'
-import { keys, removeFiles } from '../../lib/files.js'
+import { buckets, removeFolder } from '../../lib/files.js'
 import { fa, toman } from '../../lib/format.js'
 
 export default function CoursesTab() {
@@ -22,10 +22,15 @@ export default function CoursesTab() {
   }
 
   const remove = async (course) => {
-    await removeFiles(keys.coursePrefix(course.id)).catch(() => {})
-    deleteCourse(course.id)
+    try {
+      await removeFolder(buckets.public, String(course.id))
+      await removeFolder(buckets.private, String(course.id))
+      await deleteCourse(course.id)
+      notify('دوره حذف شد')
+    } catch {
+      notify('حذف دوره انجام نشد')
+    }
     setConfirmId(null)
-    notify('دوره حذف شد')
   }
 
   if (editing) return <CourseForm course={target} onDone={close} />
@@ -40,8 +45,9 @@ export default function CoursesTab() {
             <b>{course.title}</b>
             <span className="tag">{toman(course.price)}</span>
             <span className="tag">{fa(course.sessions.length)} جلسه</span>
-            {course.hasBanner && <span className="tag">بنر</span>}
-            {course.hasTeaser && <span className="tag">تیزر</span>}
+            {course.bannerPath && <span className="tag">بنر</span>}
+            {course.teaserPath && <span className="tag">تیزر</span>}
+            {!course.published && <span className="tag">پیش‌نویس</span>}
           </span>
           <span className="row-actions">
             <button className="btn btn-outline btn-sm" onClick={() => open(course)}>ویرایش</button>

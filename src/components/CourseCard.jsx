@@ -15,6 +15,7 @@ export default function CourseCard({ course }) {
         <span className="tag">{course.level}</span>
         <span className="tag">{fa(course.sessions.length)} جلسه</span>
         {time && <span className="tag">{time}</span>}
+        {!course.published && <span className="tag">پیش‌نویس</span>}
       </div>
       <h3 className="card-title">{course.title}</h3>
       <p className="muted clamp">{course.summary}</p>

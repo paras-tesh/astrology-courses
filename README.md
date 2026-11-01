@@ -8,23 +8,36 @@ Built with React 18, Vite and React Router.
 
 ```
 npm install
+```
+
+Copy `.env.example` to `.env` and fill in the project URL and the publishable key from the Supabase dashboard, then:
+
+```
 npm run dev
 ```
 
-The admin panel lives at `/admin`. The password can be changed from its settings tab.
+## Supabase setup
 
-## Current state
+Run the files in `supabase/` once, in order, from the SQL editor:
 
-There is no backend yet. Courses, reviews, the cart and every uploaded file are stored in the browser (localStorage and IndexedDB), so nothing is shared between visitors. The admin login is checked in the browser as well, which makes it a placeholder rather than real protection.
+1. `01_schema.sql` tables, access rules (row level security) and storage buckets
+2. `02_coupon_function.sql` coupon check used by the cart, plus two sample coupons
+3. `03_sample_courses.sql` optional sample courses
 
-The courses in `src/data/seed.js` are sample content.
+Sign up through the site, then make that account an admin from the SQL editor:
+
+```sql
+update public.profiles set role = 'admin'
+where id = (select id from auth.users where email = 'you@example.com');
+```
+
+The admin panel is at `/admin`.
 
 ## Still to do
 
-- API and real authentication (admin and students)
-- Zarinpal payment: `src/lib/payment.js` is the single place to change
-- Server-side storage for videos, PDFs and audio, with access limited to buyers
-- Sending the contact and newsletter forms somewhere
+- Payment: `src/lib/payment.js` calls an Edge Function named `payment-start` that does not exist yet. It should create the order, request a Zarinpal payment and return `{ redirectUrl }`; a second function verifies the payment and creates the enrollment.
+- Large videos: uploads are plain requests, which is fine for small files. Hour-long videos need resumable uploads or a video host.
+- Sending a real confirmation email (custom SMTP) before launch.
 
 ## Scripts
 

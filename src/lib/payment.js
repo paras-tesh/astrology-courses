@@ -1,10 +1,12 @@
-// Demo implementation: pretends the payment succeeded.
-//
-// For Zarinpal, send { amount, courseIds } to your own server. The server asks
-// Zarinpal for a payment authority and answers with { redirectUrl }; the cart
-// page then sends the customer there. Zarinpal expects rials unless the
-// request sets currency to IRT. Verify the result on the server after the
-// customer comes back, and only then unlock the courses.
-export async function startPayment({ amount, courseIds }) {
-  return { amount, courseIds, paid: true }
+import { supabase } from './supabase.js'
+
+// Asks the payment-start Edge Function for a Zarinpal payment URL.
+// Only ids and the coupon code are sent: the server works out the price itself
+// from the database, so the amount can't be tampered with in the browser.
+export async function startPayment({ courseIds, coupon }) {
+  const { data, error } = await supabase.functions.invoke('payment-start', {
+    body: { courseIds, coupon },
+  })
+  if (error) throw error
+  return data
 }

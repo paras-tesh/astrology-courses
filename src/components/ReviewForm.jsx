@@ -14,12 +14,15 @@ export default function ReviewForm() {
     )
   }
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (text.trim().length < 10) return notify('متن تجربه کمی کوتاه است')
-    submitReview(user.name, text.trim())
-    setText('')
-    notify('تجربهٔ شما پس از تأیید مدیر نمایش داده می‌شود')
+    if (await submitReview(text.trim())) {
+      setText('')
+      notify('تجربهٔ شما پس از تأیید مدیر نمایش داده می‌شود')
+    } else {
+      notify('ثبت تجربه انجام نشد')
+    }
   }
 
   return (

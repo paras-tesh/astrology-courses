@@ -3,7 +3,7 @@ import Icon from '../components/Icon.jsx'
 import { Cover } from '../components/Media.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { categories, posts } from '../data/posts.js'
-import { keys } from '../lib/files.js'
+import { buckets } from '../lib/files.js'
 
 export default function Blog() {
   const { courses, openMedia } = useApp()
@@ -13,7 +13,7 @@ export default function Blog() {
   const list = posts.filter(
     (post) => (category === 'همه' || post.category === category) && post.title.includes(query)
   )
-  const teasers = courses.filter((course) => course.hasTeaser)
+  const teasers = courses.filter((course) => course.teaserPath)
 
   return (
     <main className="wrap">
@@ -45,7 +45,9 @@ export default function Blog() {
                 <h3 className="card-title">{course.title}</h3>
                 <button
                   className="btn btn-outline btn-sm"
-                  onClick={() => openMedia({ title: `تیزر: ${course.title}`, fileKey: keys.teaser(course.id), kind: 'video' })}
+                  onClick={() =>
+                    openMedia({ title: `تیزر: ${course.title}`, kind: 'video', bucket: buckets.public, path: course.teaserPath })
+                  }
                 >
                   <Icon name="play" size={16} /> مشاهدهٔ تیزر
                 </button>

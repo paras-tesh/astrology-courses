@@ -2,32 +2,41 @@ import { useState } from 'react'
 import Icon from '../../components/Icon.jsx'
 import { useApp } from '../../context/AppContext.jsx'
 import { levels, uid } from '../../lib/courses.js'
-import { keys, removeFiles, saveFile } from '../../lib/files.js'
+import { buckets, extension, removeFolder, uploadFile } from '../../lib/files.js'
 import { fa } from '../../lib/format.js'
+import { supabase } from '../../lib/supabase.js'
 
+// [type, label, accept, field on the session object, database column]
 const fileTypes = [
-  ['video', 'ویدئو', 'video/*', 'hasVideo'],
-  ['pdf', 'PDF', 'application/pdf', 'hasPdf'],
-  ['audio', 'فایل صوتی', 'audio/*', 'hasAudio'],
+  ['video', 'ویدئو', 'video/*', 'videoPath', 'video_path'],
+  ['pdf', 'PDF', 'application/pdf', 'pdfPath', 'pdf_path'],
+  ['audio', 'فایل صوتی', 'audio/*', 'audioPath', 'audio_path'],
 ]
 
 const toLines = (text) => text.split('\n').map((line) => line.trim()).filter(Boolean)
 
+// Throws when a Supabase call failed, otherwise hands back its data.
+function unwrap({ data, error }) {
+  if (error) throw error
+  return data
+}
+
+// New sessions get a string id until they are saved and the database assigns a number.
 const newSession = (chapter = '') => ({
   id: uid(),
   chapter,
   title: '',
   description: '',
   minutes: '',
-  hasVideo: false,
-  hasPdf: false,
-  hasAudio: false,
+  videoPath: null,
+  pdfPath: null,
+  audioPath: null,
   files: {},
 })
 
 function initialForm(course) {
   if (!course) {
-    return { title: '', level: levels[0], price: '', summary: '', features: '', sessions: [newSession()] }
+    return { title: '', level: levels[0], price: '', summary: '', features: '', published: true, sessions: [newSession()] }
   }
   return {
     title: course.title,
@@ -35,12 +44,13 @@ function initialForm(course) {
     price: String(course.price),
     summary: course.summary,
     features: course.features.join('\n'),
+    published: course.published,
     sessions: course.sessions.map((s) => ({ ...s, minutes: String(s.minutes || ''), files: {} })),
   }
 }
 
 export default function CourseForm({ course, onDone }) {
-  const { saveCourse, notify } = useApp()
+  const { refreshCourses, notify } = useApp()
   const [form, setForm] = useState(() => initialForm(course))
   const [banner, setBanner] = useState(null)
   const [teaser, setTeaser] = useState(null)
@@ -84,46 +94,70 @@ export default function CourseForm({ course, onDone }) {
 
     setSaving(true)
     try {
-      const id = course?.id ?? Date.now()
-
-      if (banner) await saveFile(keys.banner(id), banner)
-      if (teaser) await saveFile(keys.teaser(id), teaser)
-
-      const kept = new Set(form.sessions.map((s) => s.id))
-      for (const old of course?.sessions ?? []) {
-        if (!kept.has(old.id)) await removeFiles(keys.sessionPrefix(id, old.id))
-      }
-
-      const sessions = []
-      for (const { files, ...session } of form.sessions) {
-        for (const [type, file] of Object.entries(files)) {
-          await saveFile(keys.session(id, session.id, type), file)
-          session[fileTypes.find(([t]) => t === type)[3]] = true
-        }
-        sessions.push({
-          ...session,
-          chapter: session.chapter.trim(),
-          title: session.title.trim(),
-          description: session.description.trim(),
-          minutes: Number(session.minutes) || 0,
-        })
-      }
-
-      saveCourse({
-        id,
+      const row = {
         title: form.title.trim(),
         level: form.level,
         price,
         summary: form.summary.trim(),
         features: toLines(form.features),
-        hasBanner: Boolean(banner || course?.hasBanner),
-        hasTeaser: Boolean(teaser || course?.hasTeaser),
-        sessions,
-      })
+        published: form.published,
+      }
+
+      let courseId = course?.id
+      if (courseId) unwrap(await supabase.from('courses').update(row).eq('id', courseId))
+      else courseId = unwrap(await supabase.from('courses').insert(row).select('id').single()).id
+
+      const media = {}
+      if (banner) {
+        const path = `${courseId}/banner-${Date.now()}.${extension(banner)}`
+        media.banner_path = await uploadFile(buckets.public, path, banner, course?.bannerPath)
+      }
+      if (teaser) {
+        const path = `${courseId}/teaser-${Date.now()}.${extension(teaser)}`
+        media.teaser_path = await uploadFile(buckets.public, path, teaser, course?.teaserPath)
+      }
+      if (Object.keys(media).length) unwrap(await supabase.from('courses').update(media).eq('id', courseId))
+
+      const kept = form.sessions.filter((s) => typeof s.id === 'number').map((s) => s.id)
+      for (const old of course?.sessions ?? []) {
+        if (kept.includes(old.id)) continue
+        await removeFolder(buckets.private, `${courseId}/${old.id}`)
+        unwrap(await supabase.from('sessions').delete().eq('id', old.id))
+      }
+
+      for (const [position, session] of form.sessions.entries()) {
+        const sessionRow = {
+          course_id: courseId,
+          position,
+          chapter: session.chapter.trim(),
+          title: session.title.trim(),
+          description: session.description.trim(),
+          minutes: Number(session.minutes) || 0,
+        }
+
+        let sessionId = session.id
+        if (typeof sessionId === 'number') {
+          unwrap(await supabase.from('sessions').update(sessionRow).eq('id', sessionId))
+        } else {
+          sessionId = unwrap(await supabase.from('sessions').insert(sessionRow).select('id').single()).id
+        }
+
+        const paths = {}
+        for (const [type, , , field, column] of fileTypes) {
+          const file = session.files[type]
+          if (!file) continue
+          const path = `${courseId}/${sessionId}/${type}-${Date.now()}.${extension(file)}`
+          paths[column] = await uploadFile(buckets.private, path, file, session[field])
+        }
+        if (Object.keys(paths).length) unwrap(await supabase.from('sessions').update(paths).eq('id', sessionId))
+      }
+
+      await refreshCourses()
       notify(course ? 'تغییرات ذخیره شد' : 'دوره اضافه شد')
       onDone()
-    } catch {
-      notify('ذخیرهٔ فایل‌ها انجام نشد؛ حجم فایل‌ها را بررسی کنید')
+    } catch (error) {
+      console.error(error)
+      notify('ذخیرهٔ دوره انجام نشد؛ اتصال و حجم فایل‌ها را بررسی کنید')
     } finally {
       setSaving(false)
     }
@@ -163,15 +197,24 @@ export default function CourseForm({ course, onDone }) {
 
       <div className="grid">
         <label className="field">
-          بنر دوره (تصویر){course?.hasBanner && !banner && <Icon name="check" size={14} />}
+          بنر دوره (تصویر){course?.bannerPath && !banner && <Icon name="check" size={14} />}
           <input type="file" accept="image/*" onChange={(e) => setBanner(e.target.files[0] || null)} />
         </label>
         <label className="field">
-          تیزر دوره (ویدئوی کوتاه){course?.hasTeaser && !teaser && <Icon name="check" size={14} />}
+          تیزر دوره (ویدئوی کوتاه){course?.teaserPath && !teaser && <Icon name="check" size={14} />}
           <input type="file" accept="video/*" onChange={(e) => setTeaser(e.target.files[0] || null)} />
         </label>
       </div>
       <p className="muted">اگر تیزر بارگذاری شود، دکمهٔ «مشاهدهٔ تیزر» در صفحهٔ دوره نمایش داده می‌شود.</p>
+
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={form.published}
+          onChange={(e) => setForm({ ...form, published: e.target.checked })}
+        />
+        نمایش در سایت
+      </label>
 
       <h3>جلسات</h3>
       {form.sessions.map((session, i) => (
@@ -220,10 +263,10 @@ export default function CourseForm({ course, onDone }) {
           </label>
 
           <div className="grid">
-            {fileTypes.map(([type, label, accept, flag]) => (
+            {fileTypes.map(([type, label, accept, field]) => (
               <label className="field" key={type}>
                 {label}
-                {(session[flag] || session.files[type]) && <Icon name="check" size={14} />}
+                {(session[field] || session.files[type]) && <Icon name="check" size={14} />}
                 <input type="file" accept={accept} onChange={(e) => setSessionFile(i, type, e.target.files[0])} />
               </label>
             ))}

@@ -19,7 +19,7 @@ export default function MediaModal() {
       <div className="card modal" onClick={(e) => e.stopPropagation()}>
         <b>{media.title}</b>
         <div className="modal-body">
-          <Player fileKey={media.fileKey} kind={media.kind} />
+          <Player bucket={media.bucket} path={media.path} kind={media.kind} />
         </div>
         <button className="btn btn-sm" onClick={closeMedia}>بستن</button>
       </div>

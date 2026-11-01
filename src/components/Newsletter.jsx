@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
-import { appendToList } from '../lib/storage.js'
+import { supabase } from '../lib/supabase.js'
 
 export default function Newsletter() {
   const { notify } = useApp()
   const [email, setEmail] = useState('')
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (!/^\S+@\S+\.\S+$/.test(email)) return notify('ایمیل معتبر وارد کنید')
-    appendToList('subscribers', email)
+    const { error } = await supabase.from('subscribers').insert({ email: email.trim() })
+    // 23505: the address is already on the list, which is fine for the visitor
+    if (error && error.code !== '23505') return notify('ثبت ایمیل انجام نشد')
     setEmail('')
     notify('ایمیل شما ثبت شد')
   }

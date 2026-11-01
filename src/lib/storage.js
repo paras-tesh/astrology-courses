@@ -16,5 +16,3 @@ export function writeJson(key, value) {
     // storage is full or blocked, nothing useful to do here
   }
 }
-
-export const appendToList = (key, item) => writeJson(key, [...readJson(key, []), item])

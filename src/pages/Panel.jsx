@@ -3,13 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { groupByChapter } from '../lib/courses.js'
-import { downloadFile, keys } from '../lib/files.js'
+import { buckets, downloadPrivate } from '../lib/files.js'
 import { fa } from '../lib/format.js'
 
 export default function Panel() {
-  const { user, setUser, courses, owned, progress, toggleLesson, openMedia, notify } = useApp()
+  const { user, accountLoading, signOut, courses, owned, progress, toggleLesson, openMedia, notify } = useApp()
   const navigate = useNavigate()
   const [openId, setOpenId] = useState(null)
+
+  if (accountLoading) return null
 
   if (!user) {
     return (
@@ -25,18 +27,16 @@ export default function Panel() {
 
   const mine = courses.filter((c) => owned.includes(c.id))
 
-  const logout = () => {
-    setUser(null)
+  const logout = async () => {
+    await signOut()
     navigate('/')
   }
 
-  const play = (course, session, type) =>
-    openMedia({ title: session.title, fileKey: keys.session(course.id, session.id, type), kind: type })
+  const play = (session, kind, path) =>
+    openMedia({ title: session.title, kind, bucket: buckets.private, path })
 
-  const download = async (course, session, type) => {
-    const extension = type === 'pdf' ? 'pdf' : 'mp3'
-    const ok = await downloadFile(keys.session(course.id, session.id, type), `${session.title}.${extension}`)
-    if (!ok) notify('فایل پیدا نشد')
+  const downloadPdf = async (session) => {
+    if (!(await downloadPrivate(session.pdfPath, `${session.title}.pdf`))) notify('دریافت فایل انجام نشد')
   }
 
   return (
@@ -54,7 +54,7 @@ export default function Panel() {
         )}
 
         {mine.map((course) => {
-          const done = course.sessions.filter((s) => progress[`${course.id}:${s.id}`]).length
+          const done = course.sessions.filter((s) => progress[s.id]).length
           const percent = course.sessions.length ? Math.round((done / course.sessions.length) * 100) : 0
           const open = openId === course.id
 
@@ -80,29 +80,29 @@ export default function Panel() {
                             <label>
                               <input
                                 type="checkbox"
-                                checked={Boolean(progress[`${course.id}:${session.id}`])}
-                                onChange={() => toggleLesson(course.id, session.id)}
+                                checked={Boolean(progress[session.id])}
+                                onChange={() => toggleLesson(session.id)}
                               />
                               <b>{session.title}</b>
                             </label>
                             {session.description && <p className="muted">{session.description}</p>}
                             <div className="chips">
-                              {session.hasVideo && (
-                                <button onClick={() => play(course, session, 'video')}>
+                              {session.videoPath && (
+                                <button onClick={() => play(session, 'video', session.videoPath)}>
                                   <Icon name="play" size={16} /> ویدئو
                                 </button>
                               )}
-                              {session.hasPdf && (
-                                <button onClick={() => download(course, session, 'pdf')}>
+                              {session.pdfPath && (
+                                <button onClick={() => downloadPdf(session)}>
                                   <Icon name="download" size={16} /> PDF
                                 </button>
                               )}
-                              {session.hasAudio && (
-                                <button onClick={() => play(course, session, 'audio')}>
+                              {session.audioPath && (
+                                <button onClick={() => play(session, 'audio', session.audioPath)}>
                                   <Icon name="headphones" size={16} /> صوت
                                 </button>
                               )}
-                              {!session.hasVideo && !session.hasPdf && !session.hasAudio && (
+                              {!session.videoPath && !session.pdfPath && !session.audioPath && (
                                 <span className="muted">فایلی بارگذاری نشده است.</span>
                               )}
                             </div>

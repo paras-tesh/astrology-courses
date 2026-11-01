@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
-import { appendToList } from '../lib/storage.js'
+import { supabase } from '../lib/supabase.js'
 
 const empty = { name: '', email: '', message: '' }
 
@@ -9,10 +9,15 @@ export default function Contact() {
   const [form, setForm] = useState(empty)
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (!form.name.trim() || !form.message.trim()) return notify('نام و پیام را وارد کنید')
-    appendToList('messages', form)
+    const { error } = await supabase.from('contact_messages').insert({
+      name: form.name.trim(),
+      email: form.email.trim() || null,
+      message: form.message.trim(),
+    })
+    if (error) return notify('ارسال پیام انجام نشد')
     setForm(empty)
     notify('پیام شما ارسال شد')
   }

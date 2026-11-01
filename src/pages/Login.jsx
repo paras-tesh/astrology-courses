@@ -2,22 +2,39 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext.jsx'
 
-// Placeholder sign-in: any valid email and a password of six characters or more.
+const messages = {
+  'Invalid login credentials': 'ایمیل یا رمز اشتباه است',
+  'User already registered': 'این ایمیل قبلاً ثبت شده است',
+}
+
 export default function Login() {
-  const { setUser, notify, redirectTo, setRedirectTo } = useApp()
+  const { signIn, signUp, notify, redirectTo, setRedirectTo } = useApp()
   const navigate = useNavigate()
   const [registering, setRegistering] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [busy, setBusy] = useState(false)
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (!/^\S+@\S+\.\S+$/.test(form.email) || form.password.length < 6) {
       return notify('ایمیل معتبر و رمز حداقل ۶ کاراکتر وارد کنید')
     }
-    setUser({ name: form.name.trim() || form.email.split('@')[0], email: form.email })
-    setRedirectTo(null)
-    navigate(redirectTo || '/panel')
+    setBusy(true)
+    try {
+      if (registering) {
+        const signedIn = await signUp(form.name.trim(), form.email.trim(), form.password)
+        if (!signedIn) return notify('ایمیل تأیید برای شما ارسال شد')
+      } else {
+        await signIn(form.email.trim(), form.password)
+      }
+      setRedirectTo(null)
+      navigate(redirectTo || '/panel')
+    } catch (error) {
+      notify(messages[error.message] || 'ورود ناموفق بود، دوباره تلاش کنید')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -30,7 +47,9 @@ export default function Login() {
           )}
           <input type="email" placeholder="ایمیل" value={form.email} onChange={update('email')} />
           <input type="password" placeholder="رمز عبور" value={form.password} onChange={update('password')} />
-          <button className="btn block" type="submit">{registering ? 'ایجاد حساب' : 'ورود'}</button>
+          <button className="btn block" type="submit" disabled={busy}>
+            {registering ? 'ایجاد حساب' : 'ورود'}
+          </button>
           <p className="center">
             <button type="button" className="link-btn" onClick={() => setRegistering(!registering)}>
               {registering ? 'حساب دارید؟ وارد شوید' : 'حساب ندارید؟ ثبت‌نام کنید'}

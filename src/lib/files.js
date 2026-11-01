@@ -1,62 +1,44 @@
-const DB_NAME = 'razhaye-files'
-const STORE = 'files'
+import { supabase } from './supabase.js'
 
-let dbPromise
+export const buckets = { public: 'course-public', private: 'course-private' }
 
-function openDb() {
-  dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-  return dbPromise
+export const extension = (file) => file.name.split('.').pop().toLowerCase()
+
+export const publicUrl = (path) => supabase.storage.from(buckets.public).getPublicUrl(path).data.publicUrl
+
+// Public files get a plain URL, private ones a signed link that expires after an hour.
+export async function getFileUrl(bucket, path) {
+  if (bucket === buckets.public) return publicUrl(path)
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600)
+  if (error) throw error
+  return data.signedUrl
 }
 
-async function run(mode, action) {
-  const db = await openDb()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, mode)
-    const request = action(tx.objectStore(STORE))
-    tx.oncomplete = () => resolve(request?.result)
-    tx.onerror = () => reject(tx.error)
-  })
+export async function uploadFile(bucket, path, file, oldPath) {
+  const { error } = await supabase.storage.from(bucket).upload(path, file, { contentType: file.type || undefined })
+  if (error) throw error
+  if (oldPath) await supabase.storage.from(bucket).remove([oldPath])
+  return path
 }
 
-export const keys = {
-  banner: (courseId) => `c${courseId}/banner`,
-  teaser: (courseId) => `c${courseId}/teaser`,
-  session: (courseId, sessionId, type) => `c${courseId}/s${sessionId}/${type}`,
-  sessionPrefix: (courseId, sessionId) => `c${courseId}/s${sessionId}/`,
-  coursePrefix: (courseId) => `c${courseId}/`,
+export async function removeFolder(bucket, prefix) {
+  const { data } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 })
+  if (!data) return
+  const files = []
+  for (const entry of data) {
+    if (entry.id) files.push(`${prefix}/${entry.name}`)
+    else await removeFolder(bucket, `${prefix}/${entry.name}`)
+  }
+  if (files.length) await supabase.storage.from(bucket).remove(files)
 }
 
-export const saveFile = (key, file) => run('readwrite', (store) => store.put(file, key))
-
-export async function getFile(key) {
-  return (await run('readonly', (store) => store.get(key))) ?? null
-}
-
-export const removeFiles = (prefix) =>
-  run('readwrite', (store) => {
-    const request = store.openCursor()
-    request.onsuccess = () => {
-      const cursor = request.result
-      if (!cursor) return
-      if (String(cursor.key).startsWith(prefix)) cursor.delete()
-      cursor.continue()
-    }
-    return request
-  })
-
-export async function downloadFile(key, fallbackName) {
-  const file = await getFile(key)
-  if (!file) return false
-  const url = URL.createObjectURL(file)
+export async function downloadPrivate(path, filename) {
+  const { data, error } = await supabase.storage
+    .from(buckets.private)
+    .createSignedUrl(path, 60, { download: filename })
+  if (error) return false
   const link = document.createElement('a')
-  link.href = url
-  link.download = file.name || fallbackName
+  link.href = data.signedUrl
   link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
   return true
 }
