@@ -68,7 +68,7 @@ export default function Header() {
               <Icon name="cart" size={22} />
               {cart.length > 0 && <span className="cart-count">{fa(cart.length)}</span>}
             </Link>
-            {isAdmin && <Link className="btn btn-outline btn-sm desktop-only" to="/admin">مدیریت</Link>}
+            {isAdmin && <Link className="btn btn-outline btn-sm desktop-only" to="/admin">پنل مدیریت</Link>}
             <div className="theme-picker">
               <button className="icon-btn" aria-label="انتخاب تم" onClick={() => setThemeOpen(!themeOpen)}>
                 <Icon name="palette" size={22} />
@@ -115,7 +115,7 @@ export default function Header() {
             ))}
             {isAdmin && (
               <Link className="drawer-link" to="/admin" onClick={closeDrawer}>
-                <span>مدیریت</span>
+                <span>ورود به پنل مدیریت</span>
                 <Icon name="chevron" size={18} />
               </Link>
             )}

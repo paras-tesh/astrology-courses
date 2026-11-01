@@ -23,13 +23,9 @@ Run the files in `supabase/` once, in order, from the SQL editor:
 1. `01_schema.sql` tables, access rules (row level security) and storage buckets
 2. `02_coupon_function.sql` coupon check used by the cart, plus two sample coupons
 3. `03_sample_courses.sql` optional sample courses
+4. `04_admin_emails.sql` list of emails that get admin access
 
-Sign up through the site, then make that account an admin from the SQL editor:
-
-```sql
-update public.profiles set role = 'admin'
-where id = (select id from auth.users where email = 'you@example.com');
-```
+Add the admin emails to the `admin_emails` table (Table Editor, lowercase). Anyone who signs in with one of them sees a "panel" button on their account page and in the header. Turn on email confirmation in Supabase Auth before going live, so nobody can sign up with an address that isn't theirs.
 
 The admin panel is at `/admin`.
 

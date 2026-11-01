@@ -7,7 +7,7 @@ import { buckets, downloadPrivate } from '../lib/files.js'
 import { fa } from '../lib/format.js'
 
 export default function Panel() {
-  const { user, accountLoading, signOut, courses, owned, progress, toggleLesson, openMedia, notify } = useApp()
+  const { user, isAdmin, accountLoading, signOut, courses, owned, progress, toggleLesson, openMedia, notify } = useApp()
   const navigate = useNavigate()
   const [openId, setOpenId] = useState(null)
 
@@ -46,6 +46,12 @@ export default function Panel() {
           <h2>سلام {user.name}</h2>
           <button className="btn btn-outline btn-sm" onClick={logout}>خروج</button>
         </div>
+
+        {isAdmin && (
+          <div className="card panel-course">
+            <Link className="btn" to="/admin">ورود به پنل مدیریت</Link>
+          </div>
+        )}
 
         {mine.length === 0 && (
           <div className="card">

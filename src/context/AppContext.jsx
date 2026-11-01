@@ -40,6 +40,7 @@ export function AppProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true)
   const [profile, setProfile] = useState(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [owned, setOwned] = useState([])
   const [progress, setProgress] = useState({})
 
@@ -56,7 +57,6 @@ export function AppProvider({ children }) {
   const user = session
     ? { id: userId, email: session.user.email, name: profile?.full_name || session.user.email.split('@')[0] }
     : null
-  const isAdmin = profile?.role === 'admin'
   const accountLoading = authLoading || (Boolean(session) && !profileLoaded)
 
   useEffect(() => {
@@ -75,6 +75,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!userId) {
       setProfile(null)
+      setIsAdmin(false)
       setOwned([])
       setProgress({})
       setProfileLoaded(false)
@@ -82,12 +83,14 @@ export function AppProvider({ children }) {
     }
     let cancelled = false
     Promise.all([
-      supabase.from('profiles').select('full_name, role').eq('id', userId).maybeSingle(),
+      supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle(),
       supabase.from('enrollments').select('course_id').eq('user_id', userId),
       supabase.from('lesson_progress').select('session_id'),
-    ]).then(([profileRes, enrollRes, progressRes]) => {
+      supabase.rpc('is_admin'),
+    ]).then(([profileRes, enrollRes, progressRes, adminRes]) => {
       if (cancelled) return
       setProfile(profileRes.data)
+      setIsAdmin(adminRes.data === true)
       setOwned((enrollRes.data || []).map((r) => r.course_id))
       setProgress(Object.fromEntries((progressRes.data || []).map((r) => [r.session_id, true])))
       setProfileLoaded(true)
